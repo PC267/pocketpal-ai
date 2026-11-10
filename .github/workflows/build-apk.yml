@@ -1,4 +1,4 @@
-name: Build PocketPal AI Debug APK
+name: Build PocketPal AI Debug APK #所有CPU通用型
 
 on:
   workflow_dispatch:
