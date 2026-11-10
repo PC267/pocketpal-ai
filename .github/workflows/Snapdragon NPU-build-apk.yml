@@ -1,4 +1,4 @@
-name: Build PocketPal (Snapdragon NPU) #高通骁龙CPU专用
+name: Build PocketPal (Snapdragon NPU)
 
 on:
   workflow_dispatch: # 仅手动触发
@@ -14,7 +14,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     env:
-      # 👇 重新开启：强制从源码编译底层，以应用 Hexagon NPU 支持
+      # 强制从源码编译底层，以应用 Hexagon NPU 支持
       ORG_GRADLE_PROJECT_rnllamaBuildFromSource: 'true'
       RNLLAMA_SKIP_POSTINSTALL: '1'
 
@@ -42,10 +42,28 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
+      # 👇 新增：Gradle 缓存，避免重复下载依赖
+      - name: Cache Gradle Wrapper
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # 👇 新增：C++ 编译缓存，极大加速第二次打包
+      - name: Cache CMake build tree
+        uses: actions/cache@v4
+        with:
+          path: node_modules/llama.rn/android/.cxx
+          key: ${{ runner.os }}-cxx-${{ hashFiles('yarn.lock', 'patches/**') }}
+
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 👇 重新加回：动态获取需要编译的 rnllama 变体（包含 CPU、GPU、NPU 等）
+      # 动态获取需要编译的 rnllama 变体
       - name: Derive the rnllama variant allowlist from the payload manifest
         run: |
           set -euo pipefail
@@ -53,7 +71,7 @@ jobs:
           echo "Declared allowlist: $VARIANTS"
           echo "ORG_GRADLE_PROJECT_rnllamaVariants=$VARIANTS" >> "$GITHUB_ENV"
 
-      # 👇 重新加回：设置高通 Hexagon SDK（NPU 加速必备）
+      # 设置高通 Hexagon SDK
       - name: Set up the Hexagon SDK
         uses: ./.github/actions/setup-hexagon-sdk
 
