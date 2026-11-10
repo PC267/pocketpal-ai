@@ -1,6 +1,5 @@
 name: Build PocketPal AI Debug APK
 
-# 👇 严格限制为仅在 GitHub 页面手动点击时运行
 on:
   workflow_dispatch:
 
@@ -15,7 +14,6 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     env:
-      # 💡 直接使用预编译库，大幅提速
       RNLLAMA_SKIP_POSTINSTALL: '1'
 
     steps:
@@ -45,7 +43,6 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 👇 修改 1：只保留正式版 (prod) 的配置，删除了 e2e 的配置
       - name: Create dummy google-services.json for CI
         run: |
           cat > android/app/google-services.json << 'EOL'
@@ -71,7 +68,6 @@ jobs:
           }
           EOL
 
-      # 生成伪造的 .env 环境变量
       - name: Create dummy .env file for CI
         run: |
           cat > .env << 'EOL'
@@ -90,13 +86,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      # 👇 修改 2：指令改成 assembleProdDebug，只编译正式环境
+      # 只编译 prod 变体
       - name: Build Debug APK
         working-directory: android
         run: |
           ./gradlew assembleProdDebug --no-daemon
 
-      # 👇 修改 3：精确抓取 prod 目录下的包，不抓 e2e
+      # 只上传 prod 目录下的 APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
