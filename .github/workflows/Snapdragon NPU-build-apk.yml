@@ -1,4 +1,4 @@
-name: Build PocketPal AI Debug APK #高通骁龙CPU专用
+name: Build PocketPal (Snapdragon NPU) #高通骁龙CPU专用
 
 on:
   workflow_dispatch: # 仅手动触发
