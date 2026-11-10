@@ -144,34 +144,57 @@ async function route(
     return;
   }
 
-  // 👇 核心修改：过滤 tools 并清洗 messages 角色
+  // 👇 终极防弹清洗逻辑
   let body: any;
   try {
     body = JSON.parse(text);
 
     if (body && typeof body === 'object') {
-      // 1. 强行忽略客户端发来的工具定义
+      // 1. 剔除工具参数
       delete body.tools;
       delete body.tool_choice;
 
-      // 2. 强行将非标准角色（如 tool, function）改为 user
+      // 2. 暴力清洗 messages 数组
       if (Array.isArray(body.messages)) {
         body.messages = body.messages.map((msg: any) => {
-          if (msg && typeof msg === 'object') {
-            if (!['system', 'user', 'assistant'].includes(msg.role)) {
-              let contentStr = '';
-              if (typeof msg.content === 'string') {
-                contentStr = msg.content;
-              } else if (msg.content) {
-                contentStr = JSON.stringify(msg.content);
-              }
-              return {
-                role: 'user',
-                content: `[Tool Output]: ${contentStr}`,
-              };
-            }
+          if (!msg || typeof msg !== 'object') {
+            return {role: 'user', content: String(msg || '')};
           }
-          return msg;
+
+          // 确保角色合法
+          let role = msg.role;
+          if (!['system', 'user', 'assistant'].includes(role)) {
+            role = 'user';
+          }
+
+          // 强制将 content 转为字符串
+          let contentStr = '';
+          if (msg.content === null || msg.content === undefined) {
+            contentStr = '';
+          } else if (Array.isArray(msg.content)) {
+            // 处理类似 [{"type": "text", "text": "hello"}] 的数组
+            contentStr = msg.content
+              .map((part: any) => {
+                if (typeof part === 'string') {
+                  return part;
+                }
+                if (part && typeof part === 'object' && part.text) {
+                  return part.text;
+                }
+                return '';
+              })
+              .join('\n');
+          } else if (typeof msg.content === 'object') {
+            contentStr = JSON.stringify(msg.content);
+          } else {
+            contentStr = String(msg.content);
+          }
+
+          // 只返回最干净的消息结构
+          return {
+            role: role,
+            content: contentStr,
+          };
         });
       }
     }
