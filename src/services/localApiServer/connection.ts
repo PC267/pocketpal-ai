@@ -143,9 +143,17 @@ async function route(
     writeError(channel, 400, readError(400));
     return;
   }
-  let body: unknown;
+  
+  // 👇 修改开始：解析 JSON 并剔除 tools 参数
+  let body: any; // 将 unknown 改为 any 以允许修改属性
   try {
     body = JSON.parse(text);
+    
+    // 强制忽略客户端发来的工具参数，防止报错 400
+    if (body && typeof body === 'object') {
+      delete body.tools;
+      delete body.tool_choice;
+    }
   } catch {
     writeError(
       channel,
@@ -154,6 +162,8 @@ async function route(
     );
     return;
   }
+  // 👆 修改结束
+
   if (!ctx.admit()) {
     writeError(channel, 503, {
       message: 'The server is busy with other requests',
