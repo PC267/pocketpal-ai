@@ -1,7 +1,8 @@
 name: Build PocketPal AI Debug APK
 
+# 👇 严格限制为仅在 GitHub 页面手动点击时运行，绝不自动触发
 on:
-  workflow_dispatch: # 允许手动点击运行
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 关键：清理 GitHub Runner 的空间，编译 llama.cpp 极耗空间
+      # 清理 GitHub Runner 的空间，编译 llama.cpp 极耗空间
       - name: Maximize build space
         run: |
           df -h /
@@ -47,7 +48,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 关键：动态获取需要编译的 rnllama 变体（包含 CPU、GPU、NPU 等）
+      # 动态获取需要编译的 rnllama 变体（包含 CPU、GPU、NPU 等）
       - name: Derive the rnllama variant allowlist from the payload manifest
         run: |
           set -euo pipefail
@@ -55,11 +56,11 @@ jobs:
           echo "Declared allowlist: $VARIANTS"
           echo "ORG_GRADLE_PROJECT_rnllamaVariants=$VARIANTS" >> "$GITHUB_ENV"
 
-      # 关键：设置高通 Hexagon SDK（官方编译必备）
+      # 设置高通 Hexagon SDK（官方编译必备）
       - name: Set up the Hexagon SDK
         uses: ./.github/actions/setup-hexagon-sdk
 
-      # 生成伪造的 Google 服务配置文件
+      # 生成包含正式和 E2E 变体的伪造 google-services.json
       - name: Create dummy google-services.json for CI
         run: |
           cat > android/app/google-services.json << 'EOL'
@@ -75,6 +76,17 @@ jobs:
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
                   "android_client_info": {
                     "package_name": "com.pocketpalai"
+                  }
+                },
+                "api_key": [{
+                  "current_key": "dummy-api-key-for-ci-builds"
+                }]
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:1111111111111111",
+                  "android_client_info": {
+                    "package_name": "com.pocketpalai.e2e"
                   }
                 },
                 "api_key": [{
