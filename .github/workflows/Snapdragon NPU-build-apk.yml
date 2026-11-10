@@ -110,5 +110,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PocketPal-AI-Prod-APK
+          name: PocketPal-Snapdragon-APK
           path: android/app/build/outputs/apk/prod/debug/*.apk
