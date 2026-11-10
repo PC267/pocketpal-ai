@@ -13,7 +13,6 @@ import {
   MAX_ADMITTED_REQUESTS,
   OpenConnection,
 } from '../services/localApiServer';
-import {isPlusUnlocked} from '../services/plus/gate';
 import NativeHardwareInfo from '../specs/NativeHardwareInfo';
 import {modelStore} from './ModelStore';
 
@@ -21,7 +20,8 @@ const KEYCHAIN_SERVICE = 'local_api_server_key';
 const LOOPBACK_HOST = '127.0.0.1';
 const ALL_INTERFACES_HOST = '0.0.0.0';
 
-export const DEFAULT_LOCAL_API_PORT = 8080;
+// 👈 这里已经改成 8083
+export const DEFAULT_LOCAL_API_PORT = 8083;
 export const MIN_LOCAL_API_PORT = 1024;
 export const MAX_LOCAL_API_PORT = 65535;
 
@@ -68,12 +68,6 @@ const usableAddress = (address: string | null) => {
   return unusable ? undefined : address;
 };
 
-/**
- * Owns the local API listener. Every `start()` and `stop()` moves the epoch,
- * and a listener event or `start()` continuation from an older epoch changes
- * nothing, so a toggle race or a late native event cannot revive a stopped
- * server.
- */
 class LocalApiServerStore {
   enabled = false;
   status: LocalApiServerStatus = 'stopped';
@@ -137,6 +131,7 @@ class LocalApiServerStore {
       : undefined;
   }
 
+  // 👈 已经彻底删除了 isPlusUnlocked 拦截
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (enabled) {
@@ -145,6 +140,7 @@ class LocalApiServerStore {
       this.stop();
     }
   }
+
   setPort(port: number): boolean {
     if (this.status !== 'stopped' || !isValidLocalApiPort(port)) {
       return false;
