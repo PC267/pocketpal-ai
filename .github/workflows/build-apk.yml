@@ -1,6 +1,6 @@
 name: Build PocketPal AI Debug APK
 
-# 👇 严格限制为仅在 GitHub 页面手动点击时运行，绝不自动触发
+# 👇 严格限制为仅在 GitHub 页面手动点击时运行
 on:
   workflow_dispatch:
 
@@ -15,9 +15,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     env:
-      # 强制从源码编译 llama.rn（为了应用你的局域网服务器修改）
-      ORG_GRADLE_PROJECT_rnllamaBuildFromSource: 'true'
-      # 跳过下载预编译包，节省时间和空间
+      # 💡 已移除源码编译选项，直接使用预编译库，大幅提速
       RNLLAMA_SKIP_POSTINSTALL: '1'
 
     steps:
@@ -26,7 +24,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 清理 GitHub Runner 的空间，编译 llama.cpp 极耗空间
       - name: Maximize build space
         run: |
           df -h /
@@ -47,18 +44,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-
-      # 动态获取需要编译的 rnllama 变体（包含 CPU、GPU、NPU 等）
-      - name: Derive the rnllama variant allowlist from the payload manifest
-        run: |
-          set -euo pipefail
-          VARIANTS=$(node scripts/verify-android-payload.js --print-variants)
-          echo "Declared allowlist: $VARIANTS"
-          echo "ORG_GRADLE_PROJECT_rnllamaVariants=$VARIANTS" >> "$GITHUB_ENV"
-
-      # 设置高通 Hexagon SDK（官方编译必备）
-      - name: Set up the Hexagon SDK
-        uses: ./.github/actions/setup-hexagon-sdk
 
       # 生成包含正式和 E2E 变体的伪造 google-services.json
       - name: Create dummy google-services.json for CI
@@ -122,8 +107,9 @@ jobs:
         run: |
           ./gradlew assembleDebug --no-daemon
 
+      # 👇 修复：使用通配符抓取所有子目录下的 APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PocketPal-AI-Debug-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/**/*.apk
