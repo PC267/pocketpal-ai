@@ -15,7 +15,7 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     env:
-      # 💡 已移除源码编译选项，直接使用预编译库，大幅提速
+      # 💡 直接使用预编译库，大幅提速
       RNLLAMA_SKIP_POSTINSTALL: '1'
 
     steps:
@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 生成包含正式和 E2E 变体的伪造 google-services.json
+      # 👇 修改 1：只保留正式版 (prod) 的配置，删除了 e2e 的配置
       - name: Create dummy google-services.json for CI
         run: |
           cat > android/app/google-services.json << 'EOL'
@@ -61,17 +61,6 @@ jobs:
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
                   "android_client_info": {
                     "package_name": "com.pocketpalai"
-                  }
-                },
-                "api_key": [{
-                  "current_key": "dummy-api-key-for-ci-builds"
-                }]
-              },
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:000000000000:android:1111111111111111",
-                  "android_client_info": {
-                    "package_name": "com.pocketpalai.e2e"
                   }
                 },
                 "api_key": [{
@@ -101,15 +90,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      # 执行编译 Debug 包
+      # 👇 修改 2：指令改成 assembleProdDebug，只编译正式环境
       - name: Build Debug APK
         working-directory: android
         run: |
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleProdDebug --no-daemon
 
-      # 👇 修复：使用通配符抓取所有子目录下的 APK
+      # 👇 修改 3：精确抓取 prod 目录下的包，不抓 e2e
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PocketPal-AI-Debug-APK
-          path: android/app/build/outputs/apk/**/*.apk
+          name: PocketPal-AI-Prod-APK
+          path: android/app/build/outputs/apk/prod/debug/*.apk
