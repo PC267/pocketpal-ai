@@ -143,16 +143,37 @@ async function route(
     writeError(channel, 400, readError(400));
     return;
   }
-  
-  // 👇 修改开始：解析 JSON 并剔除 tools 参数
-  let body: any; // 将 unknown 改为 any 以允许修改属性
+
+  // 👇 核心修改：过滤 tools 并清洗 messages 角色
+  let body: any;
   try {
     body = JSON.parse(text);
-    
-    // 强制忽略客户端发来的工具参数，防止报错 400
+
     if (body && typeof body === 'object') {
+      // 1. 强行忽略客户端发来的工具定义
       delete body.tools;
       delete body.tool_choice;
+
+      // 2. 强行将非标准角色（如 tool, function）改为 user
+      if (Array.isArray(body.messages)) {
+        body.messages = body.messages.map((msg: any) => {
+          if (msg && typeof msg === 'object') {
+            if (!['system', 'user', 'assistant'].includes(msg.role)) {
+              let contentStr = '';
+              if (typeof msg.content === 'string') {
+                contentStr = msg.content;
+              } else if (msg.content) {
+                contentStr = JSON.stringify(msg.content);
+              }
+              return {
+                role: 'user',
+                content: `[Tool Output]: ${contentStr}`,
+              };
+            }
+          }
+          return msg;
+        });
+      }
     }
   } catch {
     writeError(
@@ -162,7 +183,6 @@ async function route(
     );
     return;
   }
-  // 👆 修改结束
 
   if (!ctx.admit()) {
     writeError(channel, 503, {
