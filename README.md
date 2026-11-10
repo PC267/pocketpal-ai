@@ -1,3 +1,4 @@
+[简体中文](README_zh.md)
 <div align="center">
 
 <img src="src/assets/pocketpal-dark-v2.png" alt="PocketPal AI logo" width="120" />
