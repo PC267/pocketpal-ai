@@ -155,6 +155,9 @@ async function route(
       delete body.tools;
       delete body.tool_choice;
 
+      // 👇 👇 新增这行：强行把客户端传的模型名，改成手机实际加载的模型名
+      body.model = ctx.getServedModelId() || 'local-model'; 
+
       // 2. 暴力清洗 messages 数组
       if (Array.isArray(body.messages)) {
         body.messages = body.messages.map((msg: any) => {
