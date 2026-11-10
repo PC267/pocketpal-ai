@@ -138,9 +138,6 @@ class LocalApiServerStore {
   }
 
   setEnabled(enabled: boolean): void {
-    if (enabled && !isPlusUnlocked()) {
-      return;
-    }
     this.enabled = enabled;
     if (enabled) {
       this.start();
@@ -148,7 +145,6 @@ class LocalApiServerStore {
       this.stop();
     }
   }
-
   setPort(port: number): boolean {
     if (this.status !== 'stopped' || !isValidLocalApiPort(port)) {
       return false;
