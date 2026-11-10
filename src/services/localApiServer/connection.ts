@@ -7,8 +7,9 @@ import {
   writeJson,
 } from './http';
 
-export const MAX_OPEN_CONNECTIONS = 8;
-export const MAX_ADMITTED_REQUESTS = 2;
+// 👇 已经帮你调大了并发限制，防止 Agent 的重试机制挤爆服务器
+export const MAX_OPEN_CONNECTIONS = 20; // 允许最多 20 个 TCP 连接
+export const MAX_ADMITTED_REQUESTS = 10; // 允许同时处理 10 个推理请求
 export const READ_DEADLINE_MS = 30_000;
 
 export interface ConnectionSocket {
