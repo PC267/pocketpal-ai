@@ -58,7 +58,7 @@ export const LocalApiServerCard: React.FC = observer(() => {
   }, [store.status, store.port]);
 
   const editable = store.status === 'stopped';
-  const locked = !isPlusUnlocked();
+  const locked = false; // 👈 改成这样
   const servedModel = store.servedModelId ? modelStore.activeModel : undefined;
 
   const commitPort = (): boolean => {
