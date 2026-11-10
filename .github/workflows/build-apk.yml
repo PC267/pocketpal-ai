@@ -1,4 +1,4 @@
-name: Build PocketPal AI Debug APK #所有CPU通用型
+name: Build PocketPal (CPU/GPU Universal)
 
 on:
   workflow_dispatch:
@@ -39,6 +39,24 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
+
+      # 👇 补回：Gradle 缓存加速
+      - name: Cache Gradle Wrapper
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # 👇 补回：C++ 编译缓存加速
+      - name: Cache CMake build tree
+        uses: actions/cache@v4
+        with:
+          path: node_modules/llama.rn/android/.cxx
+          key: ${{ runner.os }}-cxx-${{ hashFiles('yarn.lock', 'patches/**') }}
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -86,15 +104,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      # 只编译 prod 变体
       - name: Build Debug APK
         working-directory: android
         run: |
           ./gradlew assembleProdDebug --no-daemon
 
-      # 只上传 prod 目录下的 APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PocketPal-AI-Prod-APK
+          name: PocketPal-Universal-APK
           path: android/app/build/outputs/apk/prod/debug/*.apk
