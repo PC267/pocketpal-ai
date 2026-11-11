@@ -86,13 +86,14 @@ jobs:
           }
           EOL
 
-      - name: Create dummy .env file for CI
+      # 👇 修改点：读取你配置的真实 Secrets，并把 PalsHub 指向真实地址
+      - name: Create .env file for CI
         run: |
           cat > .env << 'EOL'
           FIREBASE_FUNCTIONS_URL=https://dummy-firebase-url.com
-          SUPABASE_URL=https://dummy-supabase-url.supabase.co
-          SUPABASE_ANON_KEY=dummy-anon-key-for-ci-builds
-          PALSHUB_API_BASE_URL=https://dummy-palshub-api.com
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          PALSHUB_API_BASE_URL=https://palshub.ai
           APP_URL=pocketpal://app
           ENABLE_PALSHUB_INTEGRATION=true
           ENABLE_AUTHENTICATION=true
