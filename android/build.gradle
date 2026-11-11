@@ -44,4 +44,19 @@ allprojects {
             force "com.microsoft.onnxruntime:onnxruntime-android:${onnxruntimeVersion}"
         }
     }
+
+    // 👇 新增：强制所有子项目（包括第三方原生库）使用根项目的 compileSdkVersion
+    subprojects {
+        afterEvaluate { subproject ->
+            if (subproject.hasProperty("android")) {
+                subproject.android {
+                    compileSdkVersion rootProject.ext.compileSdkVersion
+                    // 如果某些库还需要 targetSdkVersion，也可以一并加上：
+                    // defaultConfig {
+                    //     targetSdkVersion rootProject.ext.targetSdkVersion
+                    // }
+                }
+            }
+        }
+    }
 }
