@@ -4,7 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {makePersistable} from 'mobx-persist-store';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
-import VIForegroundService from '@voximplant/react-native-foreground-service'; // 👈 引入前台服务
+import VIForegroundService from '@voximplant/react-native-foreground-service';
+// 👇 引入休眠锁和常亮库
+import { WakeLockInterface } from 'react-native-wake-lock';
+import { activateKeepAwake, deactivateKeepAwake } from 'react-native-keep-awake';
 
 import {LocalCompletionEngine} from '../api/completionEngines';
 import {
@@ -21,51 +24,30 @@ const KEYCHAIN_SERVICE = 'local_api_server_key';
 const LOOPBACK_HOST = '127.0.0.1';
 const ALL_INTERFACES_HOST = '0.0.0.0';
 
-// 👈 默认端口 8083
 export const DEFAULT_LOCAL_API_PORT = 8083;
 export const MIN_LOCAL_API_PORT = 1024;
 export const MAX_LOCAL_API_PORT = 65535;
 
-export type LocalApiServerStatus =
-  | 'stopped'
-  | 'starting'
-  | 'running'
-  | 'failed';
-
-export type LocalApiServerError =
-  | 'port_in_use'
-  | 'listen_failed'
-  | 'stopped_listening'
-  | 'key_unavailable';
+export type LocalApiServerStatus = 'stopped' | 'starting' | 'running' | 'failed';
+export type LocalApiServerError = 'port_in_use' | 'listen_failed' | 'stopped_listening' | 'key_unavailable';
 
 type Listener = ReturnType<typeof TcpSocket.createServer>;
-
 type KeyRead = {kind: 'found'; key: string} | {kind: 'none'} | {kind: 'error'};
 
 export const isValidLocalApiPort = (port: number) =>
-  Number.isInteger(port) &&
-  port >= MIN_LOCAL_API_PORT &&
-  port <= MAX_LOCAL_API_PORT;
+  Number.isInteger(port) && port >= MIN_LOCAL_API_PORT && port <= MAX_LOCAL_API_PORT;
 
 const toListenError = (error: unknown): LocalApiServerError => {
   const message = error instanceof Error ? error.message : String(error ?? '');
   console.warn('[LocalApiServerStore] listen failed:', message);
-  return /EADDRINUSE|address already in use/i.test(message)
-    ? 'port_in_use'
-    : 'listen_failed';
+  return /EADDRINUSE|address already in use/i.test(message) ? 'port_in_use' : 'listen_failed';
 };
 
 const usableAddress = (address: string | null) => {
-  if (address === null || !/^\d{1,3}(\.\d{1,3}){3}$/.test(address)) {
-    return undefined;
-  }
+  if (address === null || !/^\d{1,3}(\.\d{1,3}){3}$/.test(address)) return undefined;
   const octets = address.split('.').map(Number);
   const [first, second] = octets;
-  const unusable =
-    octets.some(octet => octet > 255) ||
-    first === 0 ||
-    first === 127 ||
-    (first === 169 && second === 254);
+  const unusable = octets.some(octet => octet > 255) || first === 0 || first === 127 || (first === 169 && second === 254);
   return unusable ? undefined : address;
 };
 
@@ -86,47 +68,23 @@ class LocalApiServerStore {
   private activeRequests = 0;
 
   constructor() {
-    makeAutoObservable<
-      LocalApiServerStore,
-      | 'apiKey'
-      | 'epoch'
-      | 'wentToBackground'
-      | 'listener'
-      | 'openConnections'
-      | 'activeRequests'
-    >(this, {
-      apiKey: false,
-      epoch: false,
-      wentToBackground: false,
-      listener: false,
-      openConnections: false,
-      activeRequests: false,
-    });
-    makePersistable(this, {
-      name: 'LocalApiServerStore',
-      properties: ['port', 'lanEnabled'],
-      storage: AsyncStorage,
-    });
+    makeAutoObservable<LocalApiServerStore, 'apiKey' | 'epoch' | 'wentToBackground' | 'listener' | 'openConnections' | 'activeRequests'>(
+      this,
+      { apiKey: false, epoch: false, wentToBackground: false, listener: false, openConnections: false, activeRequests: false },
+    );
+    makePersistable(this, { name: 'LocalApiServerStore', properties: ['port', 'lanEnabled'], storage: AsyncStorage });
     this.readApiKey().then(read => {
-      if (read.kind !== 'error') {
-        runInAction(() => {
-          this.hasApiKey = read.kind === 'found';
-        });
-      }
+      if (read.kind !== 'error') runInAction(() => { this.hasApiKey = read.kind === 'found'; });
     });
     AppState.addEventListener('change', this.handleAppStateChange);
   }
 
   get baseUrl(): string | undefined {
-    if (this.status !== 'running') {
-      return undefined;
-    }
-    const host =
-      this.lanEnabled && this.lanAddress ? this.lanAddress : LOOPBACK_HOST;
+    if (this.status !== 'running') return undefined;
+    const host = this.lanEnabled && this.lanAddress ? this.lanAddress : LOOPBACK_HOST;
     return `http://${host}:${this.port}/v1`;
   }
 
-  // 👇 修改点：优先返回模型的真实名字（name 或 filename），如果没有再回退到 UUID
   get servedModelId(): string | undefined {
     return modelStore.engine instanceof LocalCompletionEngine
       ? (modelStore.activeModel?.name || modelStore.activeModel?.filename || modelStore.activeModelId)
@@ -135,87 +93,55 @@ class LocalApiServerStore {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (enabled) {
-      this.start();
-    } else {
-      this.stop();
-    }
+    if (enabled) this.start();
+    else this.stop();
   }
 
   setPort(port: number): boolean {
-    if (this.status !== 'stopped' || !isValidLocalApiPort(port)) {
-      return false;
-    }
+    if (this.status !== 'stopped' || !isValidLocalApiPort(port)) return false;
     this.port = port;
     return true;
   }
 
   setLanEnabled(lanEnabled: boolean): boolean {
-    if (this.status !== 'stopped') {
-      return false;
-    }
+    if (this.status !== 'stopped') return false;
     this.lanEnabled = lanEnabled;
     return true;
   }
 
   async setApiKey(apiKey: string): Promise<boolean> {
-    if (this.status !== 'stopped' || apiKey.length === 0) {
-      return false;
-    }
+    if (this.status !== 'stopped' || apiKey.length === 0) return false;
     try {
-      await Keychain.setGenericPassword('apiKey', apiKey, {
-        service: KEYCHAIN_SERVICE,
-      });
-    } catch {
-      console.warn('[LocalApiServerStore] could not save the API key');
-      return false;
-    }
-    runInAction(() => {
-      this.hasApiKey = true;
-    });
+      await Keychain.setGenericPassword('apiKey', apiKey, { service: KEYCHAIN_SERVICE });
+    } catch { return false; }
+    runInAction(() => { this.hasApiKey = true; });
     return true;
   }
 
   async clearApiKey(): Promise<boolean> {
-    if (this.status !== 'stopped') {
-      return false;
-    }
+    if (this.status !== 'stopped') return false;
     try {
-      await Keychain.resetGenericPassword({service: KEYCHAIN_SERVICE});
-    } catch {
-      console.warn('[LocalApiServerStore] could not remove the API key');
-      return false;
-    }
-    runInAction(() => {
-      this.hasApiKey = false;
-    });
+      await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
+    } catch { return false; }
+    runInAction(() => { this.hasApiKey = false; });
     return true;
   }
 
   async start(): Promise<void> {
-    if (this.status !== 'stopped' && this.status !== 'failed') {
-      return;
-    }
+    if (this.status !== 'stopped' && this.status !== 'failed') return;
     this.epoch += 1;
     const epoch = this.epoch;
     this.status = 'starting';
     this.lastError = undefined;
 
     const keyRead = await this.readApiKey();
-    if (epoch !== this.epoch) {
-      return;
-    }
-    if (keyRead.kind === 'error') {
-      this.fail(epoch, 'key_unavailable');
-      return;
-    }
+    if (epoch !== this.epoch) return;
+    if (keyRead.kind === 'error') { this.fail(epoch, 'key_unavailable'); return; }
+
     const apiKey = keyRead.kind === 'found' ? keyRead.key : undefined;
-    const lanAddress = this.lanEnabled
-      ? await this.readLanAddress()
-      : undefined;
-    if (epoch !== this.epoch) {
-      return;
-    }
+    const lanAddress = this.lanEnabled ? await this.readLanAddress() : undefined;
+    if (epoch !== this.epoch) return;
+
     runInAction(() => {
       this.apiKey = apiKey;
       this.hasApiKey = apiKey !== undefined;
@@ -233,9 +159,12 @@ class LocalApiServerStore {
     listener?.close();
     [...this.openConnections].forEach(connection => connection.destroy());
 
-    // 👇 停止前台服务
     if (Platform.OS === 'android') {
       VIForegroundService.stopService().catch(() => {});
+      
+      // 👇 停止时释放锁
+      WakeLockInterface.releaseWakeLock().catch(() => {});
+      deactivateKeepAwake().catch(() => {});
     }
   }
 
@@ -247,59 +176,46 @@ class LocalApiServerStore {
     this.listener = listener;
 
     listener.on('listening', async () => {
-      if (epoch !== this.epoch) {
-        listener.close();
-        return;
-      }
-      runInAction(() => {
-        this.status = 'running';
-      });
+      if (epoch !== this.epoch) { listener.close(); return; }
+      runInAction(() => { this.status = 'running'; });
 
-      // 👇 启动前台服务（显示常驻通知，防止被杀）
       if (Platform.OS === 'android') {
         try {
           await VIForegroundService.createNotificationChannel({
             id: 'pocketpal_api',
             name: 'PocketPal API',
             description: 'Keeps the local API server alive',
-            importance: 1, // 低优先级，安静运行
+            importance: 1,
           });
           await VIForegroundService.startService({
             id: 1244,
             title: 'PocketPal AI 服务运行中',
             text: `局域网 API 正在监听端口 ${this.port}`,
-            icon: 'ic_launcher', 
+            icon: 'ic_launcher',
             channelId: 'pocketpal_api',
           });
+
+          // 👇 启动时获取 CPU/WiFi 锁，并强制屏幕常亮
+          await WakeLockInterface.setWakeLock();
+          activateKeepAwake();
         } catch (err) {
-          console.warn('启动前台保活服务失败:', err);
+          console.warn('启动前台保活服务或获取锁失败:', err);
         }
       }
-      // 👆 启动前台服务结束
     });
 
-    listener.on('error', (error: Error | string) =>
-      this.fail(epoch, toListenError(error)),
-    );
-    listener.on('close', () => {
-      if (this.status === 'running') {
-        this.fail(epoch, 'stopped_listening');
-      }
-    });
+    listener.on('error', (error: Error | string) => this.fail(epoch, toListenError(error)));
+    listener.on('close', () => { if (this.status === 'running') this.fail(epoch, 'stopped_listening'); });
+    
     try {
-      listener.listen({
-        port: this.port,
-        host: this.lanEnabled ? ALL_INTERFACES_HOST : LOOPBACK_HOST,
-      });
+      listener.listen({ port: this.port, host: this.lanEnabled ? ALL_INTERFACES_HOST : LOOPBACK_HOST });
     } catch (error) {
       this.fail(epoch, toListenError(error));
     }
   }
 
   private fail(epoch: number, error: LocalApiServerError): void {
-    if (epoch !== this.epoch) {
-      return;
-    }
+    if (epoch !== this.epoch) return;
     runInAction(() => {
       this.status = 'failed';
       this.lastError = error;
@@ -307,15 +223,8 @@ class LocalApiServerStore {
     });
   }
 
-  private acceptConnection(
-    socket: ConnectionSocket,
-    epoch: number,
-    context: ConnectionContext,
-  ): void {
-    if (epoch !== this.epoch) {
-      socket.destroy();
-      return;
-    }
+  private acceptConnection(socket: ConnectionSocket, epoch: number, context: ConnectionContext): void {
+    if (epoch !== this.epoch) { socket.destroy(); return; }
     handleConnection(socket, context);
   }
 
@@ -331,67 +240,35 @@ class LocalApiServerStore {
   }
 
   private admitRequest = (): boolean => {
-    if (this.activeRequests >= MAX_ADMITTED_REQUESTS) {
-      return false;
-    }
+    if (this.activeRequests >= MAX_ADMITTED_REQUESTS) return false;
     this.activeRequests += 1;
     return true;
   };
 
-  private releaseRequest = (): void => {
-    this.activeRequests -= 1;
-  };
+  private releaseRequest = (): void => { this.activeRequests -= 1; };
 
   private async readApiKey(): Promise<KeyRead> {
     try {
-      const credentials = await Keychain.getGenericPassword({
-        service: KEYCHAIN_SERVICE,
-      });
-      return credentials
-        ? {kind: 'found', key: credentials.password}
-        : {kind: 'none'};
-    } catch {
-      console.warn('[LocalApiServerStore] could not read the API key');
-      return {kind: 'error'};
-    }
+      const credentials = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE });
+      return credentials ? {kind: 'found', key: credentials.password} : {kind: 'none'};
+    } catch { return {kind: 'error'}; }
   }
 
   private async readLanAddress(): Promise<string | undefined> {
-    try {
-      return usableAddress(await NativeHardwareInfo.getWifiIPv4());
-    } catch {
-      return undefined;
-    }
+    try { return usableAddress(await NativeHardwareInfo.getWifiIPv4()); } catch { return undefined; }
   }
 
   private handleAppStateChange = async (state: AppStateStatus) => {
-    if (Platform.OS === 'ios' && state === 'background') {
-      this.wentToBackground = true;
-      return;
-    }
-    if (state !== 'active') {
-      return;
-    }
+    if (Platform.OS === 'ios' && state === 'background') { this.wentToBackground = true; return; }
+    if (state !== 'active') return;
     if (Platform.OS === 'ios' && this.wentToBackground) {
       this.wentToBackground = false;
-      if (this.enabled) {
-        this.stop();
-        this.start();
-        return;
-      }
+      if (this.enabled) { this.stop(); this.start(); return; }
     }
-    if (
-      this.enabled &&
-      (this.status === 'stopped' || this.status === 'failed')
-    ) {
-      this.start();
-      return;
-    }
+    if (this.enabled && (this.status === 'stopped' || this.status === 'failed')) { this.start(); return; }
     if (this.lanEnabled && this.status === 'running') {
       const lanAddress = await this.readLanAddress();
-      runInAction(() => {
-        this.lanAddress = lanAddress;
-      });
+      runInAction(() => { this.lanAddress = lanAddress; });
     }
   };
 }
