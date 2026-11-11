@@ -159,7 +159,7 @@ class LocalApiServerStore {
     if (Platform.OS === 'android') {
       VIForegroundService.stopService().catch(() => {});
       
-      // 👇 停止服务器时，释放底层保活锁
+      // 👇 调用原生模块释放锁
       if (NativeModules.KeepAwakeModule) {
         NativeModules.KeepAwakeModule.deactivate();
       }
@@ -193,7 +193,7 @@ class LocalApiServerStore {
             channelId: 'pocketpal_api',
           });
 
-          // 👇 启动服务器时，激活底层保活锁（屏幕常亮 + CPU 唤醒 + WiFi 不断）
+          // 👇 调用原生模块获取锁
           if (NativeModules.KeepAwakeModule) {
             NativeModules.KeepAwakeModule.activate();
           }
