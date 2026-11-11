@@ -21,6 +21,24 @@ buildscript {
     }
 }
 
+// 👇 极其重要：将强制统一 SDK 的代码放在 apply plugin 之前，确保在项目评估（Evaluate）前生效
+subprojects {
+    afterEvaluate { subproject ->
+        if (subproject.extensions.findByName("android") != null) {
+            subproject.android {
+                compileSdkVersion rootProject.ext.compileSdkVersion
+                // 顺手把 targetSdkVersion 也统一了，防止其他第三方库出现类似报错
+                if (subproject.android.hasProperty("defaultConfig")) {
+                    subproject.android.defaultConfig {
+                        targetSdkVersion rootProject.ext.targetSdkVersion
+                    }
+                }
+            }
+        }
+    }
+}
+// 👆 修改结束
+
 apply plugin: "com.facebook.react.rootproject"
 
 def onnxruntimeVersion = {
@@ -40,21 +58,6 @@ allprojects {
         resolutionStrategy {
             // onnxruntime-react-native floats this at latest.integration; ship the AAR it was released with.
             force "com.microsoft.onnxruntime:onnxruntime-android:${onnxruntimeVersion}"
-        }
-    }
-}
-
-// 👇 将 subprojects 移出 allprojects 块，单独配置，避免 Gradle 9 的 afterEvaluate 报错
-subprojects { subproject ->
-    // 使用 plugins.withId 而不是 afterEvaluate，兼容性更好，时机更早
-    subproject.plugins.withId("com.android.library") {
-        subproject.android {
-            compileSdkVersion rootProject.ext.compileSdkVersion
-        }
-    }
-    subproject.plugins.withId("com.android.application") {
-        subproject.android {
-            compileSdkVersion rootProject.ext.compileSdkVersion
         }
     }
 }
