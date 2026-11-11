@@ -1,4 +1,4 @@
-package com.pocketpal
+package com.pocketpalai
 
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -17,7 +17,8 @@ class KeepAwakeModule(reactContext: ReactApplicationContext) :
 
   override fun activate() {
     val activity = reactApplicationContext.currentActivity
-    // 1. 保持屏幕常亮
+    
+    // 1. 强制屏幕常亮（只要屏幕亮着，鸿蒙就不会断网）
     if (activity != null) {
       activity.runOnUiThread {
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -25,7 +26,8 @@ class KeepAwakeModule(reactContext: ReactApplicationContext) :
     }
 
     val context = reactApplicationContext
-    // 2. 获取 CPU 唤醒锁（允许息屏后 CPU 继续运行）
+
+    // 2. 获取 CPU 唤醒锁（允许息屏后 CPU 继续处理后台任务）
     if (wakeLock == null) {
       val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
       wakeLock = powerManager.newWakeLock(
@@ -36,7 +38,7 @@ class KeepAwakeModule(reactContext: ReactApplicationContext) :
       wakeLock?.acquire()
     }
 
-    // 3. 获取 WiFi 锁（允许息屏后网络继续通信）
+    // 3. 获取 WiFi 锁（防止息屏后 WiFi 芯片休眠）
     if (wifiLock == null) {
       val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
       wifiLock = wifiManager.createWifiLock(
@@ -50,6 +52,7 @@ class KeepAwakeModule(reactContext: ReactApplicationContext) :
 
   override fun deactivate() {
     val activity = reactApplicationContext.currentActivity
+    
     // 1. 取消屏幕常亮
     if (activity != null) {
       activity.runOnUiThread {
