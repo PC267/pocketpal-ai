@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {makePersistable} from 'mobx-persist-store';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
+import VIForegroundService from '@voximplant/react-native-foreground-service'; // 👈 引入前台服务
 
 import {LocalCompletionEngine} from '../api/completionEngines';
 import {
@@ -20,7 +21,7 @@ const KEYCHAIN_SERVICE = 'local_api_server_key';
 const LOOPBACK_HOST = '127.0.0.1';
 const ALL_INTERFACES_HOST = '0.0.0.0';
 
-// 👈 这里已经改成 8083
+// 👈 默认端口 8083
 export const DEFAULT_LOCAL_API_PORT = 8083;
 export const MIN_LOCAL_API_PORT = 1024;
 export const MAX_LOCAL_API_PORT = 65535;
@@ -131,7 +132,6 @@ class LocalApiServerStore {
       : undefined;
   }
 
-  // 👈 已经彻底删除了 isPlusUnlocked 拦截
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (enabled) {
@@ -231,6 +231,11 @@ class LocalApiServerStore {
     this.listener = undefined;
     listener?.close();
     [...this.openConnections].forEach(connection => connection.destroy());
+
+    // 👇 停止前台服务
+    if (Platform.OS === 'android') {
+      VIForegroundService.stopService().catch(() => {});
+    }
   }
 
   private listen(epoch: number): void {
@@ -240,7 +245,7 @@ class LocalApiServerStore {
     );
     this.listener = listener;
 
-    listener.on('listening', () => {
+    listener.on('listening', async () => {
       if (epoch !== this.epoch) {
         listener.close();
         return;
@@ -248,7 +253,30 @@ class LocalApiServerStore {
       runInAction(() => {
         this.status = 'running';
       });
+
+      // 👇 启动前台服务（显示常驻通知，防止被杀）
+      if (Platform.OS === 'android') {
+        try {
+          await VIForegroundService.createNotificationChannel({
+            id: 'pocketpal_api',
+            name: 'PocketPal API',
+            description: 'Keeps the local API server alive',
+            importance: 1, // 低优先级，安静运行
+          });
+          await VIForegroundService.startService({
+            id: 1244,
+            title: 'PocketPal AI 服务运行中',
+            text: `局域网 API 正在监听端口 ${this.port}`,
+            icon: 'ic_launcher', 
+            channelId: 'pocketpal_api',
+          });
+        } catch (err) {
+          console.warn('启动前台保活服务失败:', err);
+        }
+      }
+      // 👆 启动前台服务结束
     });
+
     listener.on('error', (error: Error | string) =>
       this.fail(epoch, toListenError(error)),
     );
