@@ -20,19 +20,14 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
-    <!-- 👇 新增：前台服务保活必备权限（漏掉会直接闪退） -->
+    <!-- 👇 新增：前台服务与休眠锁必备权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- 👆 新增结束 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Needed only for devices running Android 9 (API 28) or lower -->
-    <!-- Currently used for storing chat sessions (/Download) -->
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
       android:name=".MainApplication"
@@ -58,8 +53,6 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
-        <!-- Host-scoped deep link for the Hugging Face "Use this model" flow.
-             Scoped to host=hub so this is not a bare-scheme handler. -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
