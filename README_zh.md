@@ -1,4 +1,4 @@
-**[English](README.md) | [简体中文](README_zh.md)**
+**[English](README.md)**
 
 # PocketPal AI (局域网增强定制版)
 
