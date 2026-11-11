@@ -17,8 +17,6 @@ buildscript {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
         // Add the Google Services plugin dependency
-        // This is used exclusively for sending benchmarks (with user consent) to Hugging Face Spaces via Firebase.
-        // Firebase is used for App Check functionality, allowing unauthenticated users to submit their benchmark data securely.
         classpath 'com.google.gms:google-services:4.4.4'
     }
 }
@@ -44,19 +42,19 @@ allprojects {
             force "com.microsoft.onnxruntime:onnxruntime-android:${onnxruntimeVersion}"
         }
     }
+}
 
-    // 👇 新增：强制所有子项目（包括第三方原生库）使用根项目的 compileSdkVersion
-    subprojects {
-        afterEvaluate { subproject ->
-            if (subproject.hasProperty("android")) {
-                subproject.android {
-                    compileSdkVersion rootProject.ext.compileSdkVersion
-                    // 如果某些库还需要 targetSdkVersion，也可以一并加上：
-                    // defaultConfig {
-                    //     targetSdkVersion rootProject.ext.targetSdkVersion
-                    // }
-                }
-            }
+// 👇 将 subprojects 移出 allprojects 块，单独配置，避免 Gradle 9 的 afterEvaluate 报错
+subprojects { subproject ->
+    // 使用 plugins.withId 而不是 afterEvaluate，兼容性更好，时机更早
+    subproject.plugins.withId("com.android.library") {
+        subproject.android {
+            compileSdkVersion rootProject.ext.compileSdkVersion
+        }
+    }
+    subproject.plugins.withId("com.android.application") {
+        subproject.android {
+            compileSdkVersion rootProject.ext.compileSdkVersion
         }
     }
 }
