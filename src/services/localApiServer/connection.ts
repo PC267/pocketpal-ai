@@ -7,7 +7,7 @@ import {
   writeJson,
 } from './http';
 
-// 👇 已经帮你调大了并发限制，防止 Agent 的重试机制挤爆服务器
+// 👇 调大了并发限制，防止 Agent 的重试机制挤爆服务器
 export const MAX_OPEN_CONNECTIONS = 20; // 允许最多 20 个 TCP 连接
 export const MAX_ADMITTED_REQUESTS = 10; // 允许同时处理 10 个推理请求
 export const READ_DEADLINE_MS = 30_000;
@@ -155,12 +155,14 @@ async function route(
       delete body.tools;
       delete body.tool_choice;
 
-      // 👇 👇 新增这行：强行把客户端传的模型名，改成手机实际加载的模型名
+      // 2. 强行把客户端传的模型名，改成手机实际加载的模型名
       body.model = ctx.getServedModelId() || 'local-model'; 
 
-      // 2. 暴力清洗 messages 数组
+      // 3. 暴力清洗 messages 数组
       if (Array.isArray(body.messages)) {
-        body.messages = body.messages.map((msg: any) => {
+        
+        // 基础清理
+        const cleanedMessages = body.messages.map((msg: any) => {
           if (!msg || typeof msg !== 'object') {
             return {role: 'user', content: String(msg || '')};
           }
@@ -176,7 +178,6 @@ async function route(
           if (msg.content === null || msg.content === undefined) {
             contentStr = '';
           } else if (Array.isArray(msg.content)) {
-            // 处理类似 [{"type": "text", "text": "hello"}] 的数组
             contentStr = msg.content
               .map((part: any) => {
                 if (typeof part === 'string') {
@@ -194,12 +195,24 @@ async function route(
             contentStr = String(msg.content);
           }
 
-          // 只返回最干净的消息结构
           return {
             role: role,
             content: contentStr,
           };
         });
+
+        // 👇 新增：合并连续的相同角色消息（专治 Jinja 模板报错）
+        const mergedMessages: any[] = [];
+        for (const msg of cleanedMessages) {
+          const lastMsg = mergedMessages[mergedMessages.length - 1];
+          // 如果当前消息和上一条角色相同，且都不是 system，则合并
+          if (lastMsg && lastMsg.role === msg.role && msg.role !== 'system') {
+            lastMsg.content += `\n\n${msg.content}`;
+          } else {
+            mergedMessages.push(msg);
+          }
+        }
+        body.messages = mergedMessages;
       }
     }
   } catch {
