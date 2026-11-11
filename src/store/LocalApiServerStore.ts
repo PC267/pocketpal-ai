@@ -1,12 +1,10 @@
-import {AppState, AppStateStatus, Platform} from 'react-native';
+import {AppState, AppStateStatus, Platform, NativeModules} from 'react-native';
 import {makeAutoObservable, runInAction} from 'mobx';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {makePersistable} from 'mobx-persist-store';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
 import VIForegroundService from '@voximplant/react-native-foreground-service';
-// 👇 仅保留屏幕常亮库
-import { activateKeepAwake, deactivateKeepAwake } from 'react-native-keep-awake';
 
 import {LocalCompletionEngine} from '../api/completionEngines';
 import {
@@ -160,8 +158,11 @@ class LocalApiServerStore {
 
     if (Platform.OS === 'android') {
       VIForegroundService.stopService().catch(() => {});
-      // 👇 停止时关闭屏幕常亮
-      deactivateKeepAwake().catch(() => {});
+      
+      // 👇 停止服务器时，释放底层保活锁
+      if (NativeModules.KeepAwakeModule) {
+        NativeModules.KeepAwakeModule.deactivate();
+      }
     }
   }
 
@@ -192,10 +193,12 @@ class LocalApiServerStore {
             channelId: 'pocketpal_api',
           });
 
-          // 👇 启动时保持屏幕常亮（物理防休眠断网）
-          activateKeepAwake();
+          // 👇 启动服务器时，激活底层保活锁（屏幕常亮 + CPU 唤醒 + WiFi 不断）
+          if (NativeModules.KeepAwakeModule) {
+            NativeModules.KeepAwakeModule.activate();
+          }
         } catch (err) {
-          console.warn('启动前台保活服务或保持常亮失败:', err);
+          console.warn('启动前台保活服务失败:', err);
         }
       }
     });
