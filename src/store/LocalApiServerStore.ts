@@ -5,8 +5,7 @@ import {makePersistable} from 'mobx-persist-store';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
 import VIForegroundService from '@voximplant/react-native-foreground-service';
-// 👇 引入休眠锁和常亮库
-import { WakeLockInterface } from 'react-native-wake-lock';
+// 👇 仅保留屏幕常亮库
 import { activateKeepAwake, deactivateKeepAwake } from 'react-native-keep-awake';
 
 import {LocalCompletionEngine} from '../api/completionEngines';
@@ -161,9 +160,7 @@ class LocalApiServerStore {
 
     if (Platform.OS === 'android') {
       VIForegroundService.stopService().catch(() => {});
-      
-      // 👇 停止时释放锁
-      WakeLockInterface.releaseWakeLock().catch(() => {});
+      // 👇 停止时关闭屏幕常亮
       deactivateKeepAwake().catch(() => {});
     }
   }
@@ -195,11 +192,10 @@ class LocalApiServerStore {
             channelId: 'pocketpal_api',
           });
 
-          // 👇 启动时获取 CPU/WiFi 锁，并强制屏幕常亮
-          await WakeLockInterface.setWakeLock();
+          // 👇 启动时保持屏幕常亮（物理防休眠断网）
           activateKeepAwake();
         } catch (err) {
-          console.warn('启动前台保活服务或获取锁失败:', err);
+          console.warn('启动前台保活服务或保持常亮失败:', err);
         }
       }
     });
