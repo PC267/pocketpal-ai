@@ -126,9 +126,10 @@ class LocalApiServerStore {
     return `http://${host}:${this.port}/v1`;
   }
 
+  // 👇 修改点：优先返回模型的真实名字（name 或 filename），如果没有再回退到 UUID
   get servedModelId(): string | undefined {
     return modelStore.engine instanceof LocalCompletionEngine
-      ? modelStore.activeModelId
+      ? (modelStore.activeModel?.name || modelStore.activeModel?.filename || modelStore.activeModelId)
       : undefined;
   }
 
