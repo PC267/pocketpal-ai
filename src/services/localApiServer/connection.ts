@@ -212,7 +212,21 @@ async function route(
             mergedMessages.push(msg);
           }
         }
-        body.messages = mergedMessages;
+
+        // 👇 👇 核心优化：定向清洗 system 提示词（保留真实对话，不截断历史）
+        body.messages = mergedMessages.map((msg: any) => {
+          if (msg.role === 'system' && msg.content.length > 1200) {
+            // 保留开头 400 字符（角色设定）和结尾 800 字符（当前状态/指令）
+            // 中间动辄几千字的工具 JSON 定义将被无情抛弃
+            const head = msg.content.substring(0, 400);
+            const tail = msg.content.substring(msg.content.length - 800);
+            return {
+              role: 'system',
+              content: `${head}\n\n...[此处由于系统提示词过长，已自动精简掉冗余的工具描述]...\n\n${tail}`
+            };
+          }
+          return msg; // 其他 user 和 assistant 的消息原封不动保留
+        });
       }
     }
   } catch {
