@@ -59,7 +59,7 @@ jobs:
           key: ${{ runner.os }}-cxx-${{ hashFiles('yarn.lock', 'patches/**') }}
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       - name: Create dummy google-services.json for CI
         run: |
