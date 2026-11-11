@@ -86,7 +86,6 @@ jobs:
           }
           EOL
 
-      # 👇 修改点：读取你配置的真实 Secrets，并把 PalsHub 指向真实地址
       - name: Create .env file for CI
         run: |
           cat > .env << 'EOL'
@@ -105,10 +104,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
+      # 👇 核心修改：加入 clean 命令清理旧构建缓存
       - name: Build Debug APK
         working-directory: android
         run: |
-          ./gradlew assembleProdDebug --no-daemon
+          ./gradlew clean assembleProdDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
