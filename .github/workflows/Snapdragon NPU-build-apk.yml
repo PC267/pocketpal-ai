@@ -60,7 +60,7 @@ jobs:
           path: node_modules/llama.rn/android/.cxx
           key: ${{ runner.os }}-cxx-${{ hashFiles('yarn.lock', 'patches/**') }}
 
-      # 👇 修改点 1：去掉 --frozen-lockfile
+      # 👇 去掉 --frozen-lockfile
       - name: Install dependencies
         run: yarn install
 
@@ -101,7 +101,7 @@ jobs:
           }
           EOL
 
-      # 👇 修改点 2：使用真实的 Secrets
+      # 👇 使用真实的 Secrets
       - name: Create .env file for CI
         run: |
           cat > .env << 'EOL'
@@ -120,11 +120,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      # 只编译 prod 变体
+      # 👇 核心修改：加入 clean 命令清理旧构建缓存
       - name: Build Debug APK
         working-directory: android
         run: |
-          ./gradlew assembleProdDebug --no-daemon
+          ./gradlew clean assembleProdDebug --no-daemon
 
       # 只上传 prod 目录下的 APK
       - name: Upload APK
